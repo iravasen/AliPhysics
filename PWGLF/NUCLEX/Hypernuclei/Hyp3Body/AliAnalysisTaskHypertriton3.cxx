@@ -913,7 +913,7 @@ void AliAnalysisTaskHypertriton3::Terminate(Option_t *) {}
 
 int AliAnalysisTaskHypertriton3::FindEventMixingCentBin(const float centrality)
 {
-  if (centrality > 90)
+  if (centrality >= 100.)
     return -999;
   return static_cast<int>(centrality / 10);
 }
@@ -991,7 +991,6 @@ AliAnalysisTaskHypertriton3 *AliAnalysisTaskHypertriton3::AddTask(bool isMC, TSt
     ::Error("AddTaskHyperTriton2BodyML", "No analysis manager found.");
     return nullptr;
   }
-  mgr->SetDebugLevel(2);
 
   // Check the analysis type using the event handlers connected to the analysis
   // manager.

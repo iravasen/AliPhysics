@@ -614,6 +614,7 @@ Bool_t AliDielectron::Process(AliVEvent *ev1, AliVEvent *ev2)
 
   if (fTrackRotator) {
     fTrackRotator->ClearRotatedTrackPool();
+    fTrackRotator->ClearRotatedPairPool();
   }
 
   return 1;
@@ -1570,8 +1571,7 @@ void AliDielectron::FillPairArrayTR()
   while ( fTrackRotator->NextCombination() ){
     if(fTrackRotator->SameTracks() ) continue;
     AliDielectronPair candidate;
-    //candidate.SetKFUsage(fUseKF);
-    candidate.SetKFUsage(kTRUE);
+    candidate.SetKFUsage(fUseKF);
     candidate.SetTracks(&fTrackRotator->GetKFTrack1(), &fTrackRotator->GetKFTrack2(),
                         fTrackRotator->GetVTrack1(),fTrackRotator->GetVTrack2());
 
@@ -1595,8 +1595,6 @@ void AliDielectron::FillPairArrayTR()
     }
     else 
       continue;
-
-    
 
     //pair cuts
     UInt_t cutMask=fPairFilter.IsSelected(&candidate);
@@ -1831,6 +1829,8 @@ void AliDielectron::FillMCHistograms(const AliVEvent *ev) {
           for (Int_t ipair=0; ipair<npairs; ++ipair){
             AliDielectronPair *pair=static_cast<AliDielectronPair*>(PairArray(AliDielectron::kEv1PMRot)->UncheckedAt(ipair));
             Bool_t isMCtruth = AliDielectronMC::Instance()->IsMCTruth(pair, (AliDielectronSignalMC*)fSignalsMC->At(isig));
+            AliDielectronVarManager::SetValue(AliDielectronVarManager::kRotationAngle, fTrackRotator->GetRotatedPairPM(ipair)->rotAng); 
+            AliDielectronVarManager::SetValue(AliDielectronVarManager::kWeightFromRotationSingleTracks, fTrackRotator->GetRotatedPairPM(ipair)->weight); 
             if(isMCtruth) {
               //fill pair information
               if (pairClass_ULS_TR){
@@ -1852,6 +1852,8 @@ void AliDielectron::FillMCHistograms(const AliVEvent *ev) {
           for (Int_t ipair=0; ipair<npairsLS1; ++ipair){
             AliDielectronPair *pair=static_cast<AliDielectronPair*>(PairArray(AliDielectron::kEv1PPRot)->UncheckedAt(ipair));
             Bool_t isMCtruth = AliDielectronMC::Instance()->IsMCTruth(pair, (AliDielectronSignalMC*)fSignalsMC->At(isig));
+            AliDielectronVarManager::SetValue(AliDielectronVarManager::kRotationAngle, fTrackRotator->GetRotatedPairPP(ipair)->rotAng);
+            AliDielectronVarManager::SetValue(AliDielectronVarManager::kWeightFromRotationSingleTracks, fTrackRotator->GetRotatedPairPP(ipair)->weight); 
             if(isMCtruth){
               //fill pair information
               if (pairClass_LSpp_TR){
@@ -1873,6 +1875,8 @@ void AliDielectron::FillMCHistograms(const AliVEvent *ev) {
           for (Int_t ipair=0; ipair<npairsLS2; ++ipair){
             AliDielectronPair *pair=static_cast<AliDielectronPair*>(PairArray(AliDielectron::kEv1MMRot)->UncheckedAt(ipair));
             Bool_t isMCtruth = AliDielectronMC::Instance()->IsMCTruth(pair, (AliDielectronSignalMC*)fSignalsMC->At(isig));
+            AliDielectronVarManager::SetValue(AliDielectronVarManager::kRotationAngle, fTrackRotator->GetRotatedPairMM(ipair)->rotAng);
+            AliDielectronVarManager::SetValue(AliDielectronVarManager::kWeightFromRotationSingleTracks, fTrackRotator->GetRotatedPairMM(ipair)->weight); 
             if(isMCtruth){
               //fill pair information
               if (pairClass_LSmm_TR){

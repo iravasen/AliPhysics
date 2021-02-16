@@ -1,6 +1,7 @@
 #include "AliAnalysisTaskStrangenessRatios.h"
 
 #include "AliAnalysisDataContainer.h"
+#include "AliLog.h"
 
 #include <algorithm>
 #include <cmath>
@@ -18,6 +19,8 @@ using std::string;
 #include "AliAnalysisManager.h"
 #include "AliAODTrack.h"
 #include "AliAODcascade.h"
+#include "AliAODMCParticle.h"
+#include "AliMCEvent.h"
 #include "AliInputEventHandler.h"
 #include "AliPIDResponse.h"
 #include "AliAODEvent.h"
@@ -34,9 +37,15 @@ double Sq(double x) {
   return x * x;
 }
 
+constexpr int kLambdaPdg{3122};
 constexpr double kLambdaMass{1.115683};
+constexpr int kXiPdg{3312};
 constexpr double kXiMass{1.32171};
+constexpr int kOmegaPdg{3334};
 constexpr double kOmegaMass{1.67245};
+constexpr double kcTauXi{4.91359839};
+constexpr double kcTauOmega{2.46129608};
+constexpr double kcTau[2]{kcTauXi, kcTauOmega};
 
 }
 
@@ -117,6 +126,7 @@ void AliAnalysisTaskStrangenessRatios::UserCreateOutputObjects()
   {
     fTreeXi->Branch("MiniCascadeMC", &fGenCascade);
     fTreeOmega->Branch("MiniCascadeMC", &fGenCascade);
+    fMCEvent = MCEvent();
   }
   else
   {
@@ -139,9 +149,12 @@ void AliAnalysisTaskStrangenessRatios::UserExec(Option_t *)
   if (!fEventCut.AcceptEvent(ev))
   {
     PostData(1, fList);
+    PostData(2, fTreeXi);
+    PostData(3, fTreeOmega);
     return;
   }
 
+  double bField{ev->GetMagneticField()};
   auto pvObj = fEventCut.GetPrimaryVertex();
   double pv[3];
   pvObj->GetXYZ(pv);
@@ -154,6 +167,8 @@ void AliAnalysisTaskStrangenessRatios::UserExec(Option_t *)
 
   fRecCascade->centrality = fEventCut.GetCentrality();
 
+  std::vector<int> checkedLabel;
+  fGenCascade.isReconstructed = true;
   for (int iCasc = 0; iCasc < ev->GetNumberOfCascades(); iCasc++)
   {
     AliAODcascade *casc = ev->GetCascade(iCasc);
@@ -187,6 +202,39 @@ void AliAnalysisTaskStrangenessRatios::UserExec(Option_t *)
       continue;
     }
 
+    if (fMC) {
+      fGenCascade.pdg = 0;
+      auto posPart = (AliAODMCParticle*)fMCEvent->GetTrack(std::abs(pTrackCasc->GetLabel()));
+      auto negPart = (AliAODMCParticle*)fMCEvent->GetTrack(std::abs(nTrackCasc->GetLabel()));
+      auto bacPart = (AliAODMCParticle*)fMCEvent->GetTrack(std::abs(bTrackCasc->GetLabel()));
+      // Check lambda
+      int labMothPos = posPart->GetMother();
+      int labMothNeg = negPart->GetMother();
+      int labMothBac = bacPart->GetMother();
+      auto lambda = (AliAODMCParticle*)fMCEvent->GetTrack(labMothNeg);
+      if (lambda && labMothNeg == labMothPos && std::abs(lambda->GetPdgCode()) == kLambdaPdg) {
+        int labMothLam = lambda->GetMother();
+        auto cascade = (AliAODMCParticle*)fMCEvent->GetTrack(labMothBac);
+        if (!cascade) {
+          continue;
+        }
+        int pdgCascade = std::abs(cascade->GetPdgCode());
+        if (labMothLam == labMothBac && (pdgCascade == kXiPdg || pdgCascade == kOmegaPdg)) {
+          fGenCascade.pdg = cascade->GetPdgCode();
+          fGenCascade.ptMC = cascade->Pt();
+          fGenCascade.etaMC = cascade->Eta();
+          fGenCascade.yMC = cascade->Y();
+          double pv[3], sv[3];
+          cascade->XvYvZv(pv);
+          bacPart->XvYvZv(sv);
+          fGenCascade.ctMC = std::sqrt(Sq(pv[0] - sv[0]) + Sq(pv[1] - sv[1]) + Sq(pv[2] - sv[2])) * cascade->M() / cascade->P();
+          checkedLabel.push_back(labMothBac);
+        }
+      }
+      if (fOnlyTrueCandidates && fGenCascade.pdg == 0)
+        continue;
+    }
+
     fRecCascade->matter = casc->AlphaV0() > 0;
 
     fRecCascade->tpcNsigmaV0Pi = fPID->NumberOfSigmasTPC(fRecCascade->matter ? nTrackCasc : pTrackCasc, AliPID::kPion);
@@ -209,9 +257,7 @@ void AliAnalysisTaskStrangenessRatios::UserExec(Option_t *)
     fRecCascade->cosPAV0 = casc->CosPointingAngle(pv);
 
     //TOF matching
-    // fCasc_PosTOFBunchCrossing = pTrackCasc->GetTOFBunchCrossing(lMagField);
-    // fCasc_NegTOFBunchCrossing = nTrackCasc->GetTOFBunchCrossing(lMagField);
-    // fCasc_BacTOFBunchCrossing = bTrackCasc->GetTOFBunchCrossing(lMagField);
+    fRecCascade->hasTOFhit = !pTrackCasc->GetTOFBunchCrossing(bField) || !nTrackCasc->GetTOFBunchCrossing(bField) || !bTrackCasc->GetTOFBunchCrossing(bField);
 
     //track status: ( fCasc_NegTrackStatus & AliESDtrack::kITSrefit ) is the codition to check kITSrefit
     fRecCascade->hasITSrefit = (nTrackCasc->GetStatus() & AliVTrack::kITSrefit) || (pTrackCasc->GetStatus() & AliVTrack::kITSrefit) || (bTrackCasc->GetStatus() & AliVTrack::kITSrefit);
@@ -220,7 +266,6 @@ void AliAnalysisTaskStrangenessRatios::UserExec(Option_t *)
 
     //transverse momentum and eta
     fRecCascade->pt = std::sqrt(casc->Pt2Xi());
-    fRecCascade->pt = std::sqrt(casc->Eta());
 
     //calculate DCA Bachelor-Baryon to remove "bump" structure in InvMass
     fRecCascade->bachBarCosPA = casc->BachBaryonCosPA();
@@ -229,6 +274,7 @@ void AliAnalysisTaskStrangenessRatios::UserExec(Option_t *)
 
     //distance over total momentum
     double lOverP = std::sqrt((Sq(vtxCasc[0] - pv[0]) + Sq(vtxCasc[1] - pv[1]) + Sq(vtxCasc[2] - pv[2])) / (casc->Ptot2Xi() + 1e-10));
+    double ctLambda = std::sqrt(Sq(vtxCasc[0] - casc->GetSecVtxX()) + Sq(vtxCasc[1] - casc->GetSecVtxY()) + Sq(vtxCasc[2] - casc->GetSecVtxZ())) / (casc->P() + 1e-10);
 
     bool isTopolPassed = false;
     if (std::abs(casc->MassOmega() - kOmegaMass) * 1000 < 30) {
@@ -236,48 +282,57 @@ void AliAnalysisTaskStrangenessRatios::UserExec(Option_t *)
       fRecCascade->ct = lOverP * kOmegaMass;
       fRecCascade->tpcNsigmaBach = fPID->NumberOfSigmasTPC(bTrackCasc, AliPID::kKaon);
       fRecCascade->competingMass = std::abs(casc->MassXi() - kXiMass);
-      isTopolPassed = IsTopolSelected(0);
-      if(!fMC && !isTopolPassed) continue;
-      else if(fMC && isTopolPassed) fGenCascade.isReconstructed = true;
-      fTreeOmega->Fill();
-    } else if (std::abs(casc->MassXi() - kXiMass) * 1000 < 30) {
+      if (IsTopolSelected(true)) {
+        fTreeOmega->Fill();
+      }
+    }
+    if (std::abs(casc->MassXi() - kXiMass) * 1000 < 30) {
       fRecCascade->mass = casc->MassXi();
       fRecCascade->ct = lOverP * kXiMass;
       fRecCascade->tpcNsigmaBach = fPID->NumberOfSigmasTPC(bTrackCasc, AliPID::kPion);
       fRecCascade->competingMass = std::abs(casc->MassOmega() - kOmegaMass);
-      isTopolPassed = IsTopolSelected(1);
-      if(!fMC && !isTopolPassed) continue;
-      else if(fMC && isTopolPassed) fGenCascade.isReconstructed = true;
-      fTreeXi->Fill();
+      if (IsTopolSelected(false)) {
+        fTreeXi->Fill();
+      }
     }
+  }
 
-    //MC association
-    if (fMC)
-    {
-      fGenCascade.isReconstructed = true;
-      // pdgPosDaught = ((AliAODMCParticle *)lMCev->GetTrack((int)TMath::Abs(pTrackCasc->GetLabel())))->PdgCode();
-      // pdgNegDaught = ((AliAODMCParticle *)lMCev->GetTrack((int)TMath::Abs(nTrackCasc->GetLabel())))->PdgCode();
-      // pdgBachelor = ((AliAODMCParticle *)lMCev->GetTrack((int)TMath::Abs(bTrackCasc->GetLabel())))->PdgCode();
-      // int labMothPosDaught = ((AliAODMCParticle *)lMCev->GetTrack((int)TMath::Abs(pTrackCasc->GetLabel())))->GetMother();
-      // int labMothNegDaught = ((AliAODMCParticle *)lMCev->GetTrack((int)TMath::Abs(nTrackCasc->GetLabel())))->GetMother();
-      // int labMothV0 = ((AliAODMCParticle *)lMCev->GetTrack((int)TMath::Abs(labMothPosDaught)))->GetMother();
-      // int labMothBach = ((AliAODMCParticle *)lMCev->GetTrack((int)TMath::Abs(bTrackCasc->GetLabel())))->GetMother();
-      // pdgV0 = ((AliAODMCParticle *)lMCev->GetTrack((int)TMath::Abs(labMothPosDaught)))->PdgCode();
-      // pdgCasc = ((AliAODMCParticle *)lMCev->GetTrack((int)TMath::Abs(labMothBach)))->PdgCode();
-      // physprim = ((AliMCParticle *)lMCev->GetTrack((int)TMath::Abs(labMothBach)))->IsPhysicalPrimary();
-      // if (fisMCassoc && (pdgPosDaught != 2212 || pdgNegDaught != -211 || pdgBachelor != -211 || labMothPosDaught != labMothNegDaught || pdgV0 != 3122 || labMothV0 != labMothBach || pdgCasc != 3312))
-      //   assFlag[kxim] = kFALSE;
-      // if (fisMCassoc && (pdgPosDaught != 211 || pdgNegDaught != -2212 || pdgBachelor != 211 || labMothPosDaught != labMothNegDaught || pdgV0 != -3122 || labMothV0 != labMothBach || pdgCasc != -3312))
-      //   assFlag[kxip] = kFALSE;
-      // if (fisMCassoc && (pdgPosDaught != 2212 || pdgNegDaught != -211 || pdgBachelor != -321 || labMothPosDaught != labMothNegDaught || pdgV0 != 3122 || labMothV0 != labMothBach || pdgCasc != 3334))
-      //   assFlag[komm] = kFALSE;
-      // if (fisMCassoc && (pdgPosDaught != 211 || pdgNegDaught != -2212 || pdgBachelor != 321 || labMothPosDaught != labMothNegDaught || pdgV0 != -3122 || labMothV0 != labMothBach || pdgCasc != -3334))
-      //   assFlag[komp] = kFALSE;
+  if (fMC) {
+    fGenCascade.isReconstructed = false;
+    for (int iT{0}; iT < fMCEvent->GetNumberOfTracks(); ++iT) {
+      auto track = (AliAODMCParticle*)fMCEvent->GetTrack(iT);
+      int pdg = std::abs(track->GetPdgCode());
+      if (pdg != kXiPdg && pdg != kOmegaPdg) {
+        continue;
+      }
+      if (std::find(checkedLabel.begin(), checkedLabel.end(), iT) != checkedLabel.end()) {
+        continue;
+      }
+      fGenCascade.ptMC = track->Pt();
+      fGenCascade.etaMC = track->Eta();
+      fGenCascade.yMC = track->Y();
+      fGenCascade.pdg = track->GetPdgCode();
+      double pv[3], sv[3];
+      track->XvYvZv(pv);
+      for (int iD = track->GetDaughterFirst(); iD <= track->GetDaughterLast(); iD++) {
+        auto daugh = (AliAODMCParticle*)fMCEvent->GetTrack(iD);
+        if (!daugh) {
+          continue;
+        }
+        if (std::abs(daugh->GetPdgCode()) == kLambdaPdg) {
+          daugh->XvYvZv(sv);
+          break;
+        }
+      }
+      fGenCascade.ctMC = std::sqrt(Sq(pv[0] - sv[0]) + Sq(pv[1] - sv[1]) + Sq(pv[2] - sv[2])) * track->M() / track->P();
+      (pdg == kXiPdg ? fTreeXi : fTreeOmega)->Fill();
     }
   }
 
   //  Post output data.
   PostData(1, fList);
+  PostData(2, fTreeXi);
+  PostData(3, fTreeOmega);
 }
 
 AliAnalysisTaskStrangenessRatios *AliAnalysisTaskStrangenessRatios::AddTask(bool isMC, TString tskname, TString suffix)
@@ -324,40 +379,33 @@ AliAnalysisTaskStrangenessRatios *AliAnalysisTaskStrangenessRatios::AddTask(bool
 
 //
 //____________________________________________________________________________________________
-bool AliAnalysisTaskStrangenessRatios::IsTopolSelected(bool isXi)
+bool AliAnalysisTaskStrangenessRatios::IsTopolSelected(bool isOmega)
 {
-  if( fRecCascade->radius > (isXi) ? fCutRadiusXi : fCutRadiusOmega &&
+  return fRecCascade->radius > fCutRadius[isOmega] &&
       fRecCascade->radiusV0 > fCutRadiusV0 &&
       fRecCascade->dcaBachPV > fCutDCABachToPV &&
       fRecCascade->dcaV0PV > fCutDCAV0toPV &&
       fRecCascade->dcaV0piPV > fCutDCAV0piToPV &&
       fRecCascade->dcaV0prPV > fCutDCAV0prToPV &&
-      fRecCascade->dcaV0tracks > fCutDCAV0tracks &&
-      fRecCascade->dcaBachV0 > (isXi) ? fCutDCABachToV0Xi : fCutDCABachToV0Omega &&
+      fRecCascade->dcaV0tracks < fCutDCAV0tracks &&
+      fRecCascade->dcaBachV0 < fCutDCABachToV0[isOmega] &&
       fRecCascade->cosPA > fCutCosPA &&
       fRecCascade->cosPAV0 > fCutCosPAV0 &&
       fRecCascade->dcaV0prPV > fCutDCAV0prToPV &&
-      std::abs(Eta2y(fRecCascade->pt, fRecCascade->mass, fRecCascade->eta)) < fCutY &&
+      std::abs(Eta2y(fRecCascade->pt, isOmega ? kOmegaMass : kXiMass, fRecCascade->eta)) < fCutY &&
       fRecCascade->tpcNsigmaBach < fCutNsigmaTPC &&
       fRecCascade->tpcNsigmaV0Pr < fCutNsigmaTPC &&
       fRecCascade->tpcNsigmaV0Pi < fCutNsigmaTPC &&
-      fRecCascade->ct < (isXi) ? fCutCtXi : fCutCtOmega &&
+      fRecCascade->ct < fCutCt * kcTau[isOmega] &&
       fRecCascade->competingMass > fCutCompetingMass &&
       fRecCascade->tpcClBach > fCutTPCclu &&
-      fRecCascade->tpcClPi > fCutTPCclu &&
-      fRecCascade->tpcClPr > fCutTPCclu &&
-  )
-  {
-    return true;
-  }
-  return false;
+      fRecCascade->tpcClV0Pi > fCutTPCclu &&
+      fRecCascade->tpcClV0Pr > fCutTPCclu;
 }
 
 //
 //____________________________________________________________________________________________
 float AliAnalysisTaskStrangenessRatios::Eta2y(float pt, float m, float eta) const
 {
-  // convert eta to y
-  double mt = std::sqrt(m * m + pt * pt);
-  return std::asinh(pt / mt * TMath::SinH(eta));
+  return std::asinh(pt / std::hypot(m, pt) * std::sinh(eta));
 }

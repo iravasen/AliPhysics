@@ -162,7 +162,7 @@ AliConversionMesonCuts::AliConversionMesonCuts(const char *name,const char *titl
   fDoToCloseV0sCut(kFALSE),
   fDoSharedElecCut(kFALSE),
   fDoMesonQualitySelection(kFALSE),
-  fUseMCPSmearing(kFALSE),
+  fUseMCPSmearing(0),
   fAlphaPtDepCut(kFALSE),
   fDCAGammaGammaCutOn(kFALSE),
   fDCAZMesonPrimVtxCutOn(kFALSE),
@@ -175,6 +175,7 @@ AliConversionMesonCuts::AliConversionMesonCuts(const char *name,const char *titl
   fBackgroundMode(4),
   fDoJetAnalysis(kFALSE),
   fDoJetQA(kFALSE),
+  fDoOutOfJet(0),
   fDoIsolatedAnalysis(kFALSE),
   fDoHighPtHadronAnalysis(kFALSE),
   fEnableOmegaAPlikeCut(kFALSE),
@@ -294,6 +295,7 @@ AliConversionMesonCuts::AliConversionMesonCuts(const AliConversionMesonCuts &ref
   fBackgroundMode(4),
   fDoJetAnalysis(ref.fDoJetAnalysis),
   fDoJetQA(ref.fDoJetQA),
+  fDoOutOfJet(ref.fDoOutOfJet),
   fDoIsolatedAnalysis(ref.fDoIsolatedAnalysis),
   fDoHighPtHadronAnalysis(ref.fDoHighPtHadronAnalysis),
   fEnableOmegaAPlikeCut(ref.fEnableOmegaAPlikeCut),
@@ -1922,6 +1924,21 @@ Bool_t AliConversionMesonCuts::SetMesonKind(Int_t mesonKind){
     fMesonKind = 0;
     fDoHighPtHadronAnalysis = kTRUE;
     break;
+  case 6: // out of jet
+    fMesonKind = 0;
+    fDoJetAnalysis = kTRUE;
+    fDoOutOfJet = 1;
+    break;
+  case 7: // out of jet, only on opposite side of Jet
+    fMesonKind = 0;
+    fDoJetAnalysis = kTRUE;
+    fDoOutOfJet = 2;
+    break;
+  case 8: // out of jet, in "donut shape" [R, R + 0.2] around Jet
+    fMesonKind = 0;
+    fDoJetAnalysis = kTRUE;
+    fDoOutOfJet = 3;
+    break;
   default:
     cout<<"Warning: Meson kind not defined"<<mesonKind<<endl;
     return kFALSE;
@@ -3276,7 +3293,8 @@ Bool_t AliConversionMesonCuts::SetBackgroundScheme(Int_t BackgroundScheme){
     fBackgroundUseLikeSign      = kTRUE;
     fBackgroundUseSideband      = kFALSE;
     break;
-  case 11: // b mixed event with pi0 sideband candidates (right side of pi0 peak)
+  case 11: // b same event pi0 sideband candidates (right side of pi0 peak)
+    fBackgroundMode             = 6;
     fUseRotationMethodInBG      = kFALSE;
     fUseTrackMultiplicityForBG  = kFALSE;
     fDoBGProbability            = kFALSE;
@@ -3285,7 +3303,8 @@ Bool_t AliConversionMesonCuts::SetBackgroundScheme(Int_t BackgroundScheme){
     fSidebandMixingLow          = 0.180;
     fSidebandMixingHigh         = 0.220;
     break;
-  case 12: // c mixed event with pi0 sideband candidates (left side of pi0 peak)
+  case 12: // c same event with pi0 sideband candidates (left side of pi0 peak)
+    fBackgroundMode             = 6;
     fUseRotationMethodInBG      = kFALSE;
     fUseTrackMultiplicityForBG  = kFALSE;
     fDoBGProbability            = kFALSE;
@@ -3294,7 +3313,8 @@ Bool_t AliConversionMesonCuts::SetBackgroundScheme(Int_t BackgroundScheme){
     fSidebandMixingLow          = 0.01;
     fSidebandMixingHigh         = 0.05;
     break;
-  case 13: // d mixing event with pi0 sideband candidates (both sides of pi0 peak)
+  case 13: // d same event with pi0 sideband candidates (both sides of pi0 peak)
+    fBackgroundMode                  = 6;
     fUseRotationMethodInBG           = kFALSE;
     fUseTrackMultiplicityForBG       = kFALSE;
     fDoBGProbability                 = kFALSE;
@@ -3306,7 +3326,8 @@ Bool_t AliConversionMesonCuts::SetBackgroundScheme(Int_t BackgroundScheme){
     fSidebandMixingRightLow          = 0.180;
     fSidebandMixingRightHigh         = 0.220;
     break;
-  case 14: //e mixed event with pi0 sideband candidates (right side of pi0 peak)
+  case 14: //e same event with pi0 sideband candidates (right side of pi0 peak)
+    fBackgroundMode             = 6;
     fUseRotationMethodInBG      = kFALSE;
     fUseTrackMultiplicityForBG  = kFALSE;
     fDoBGProbability            = kFALSE;
@@ -3315,7 +3336,8 @@ Bool_t AliConversionMesonCuts::SetBackgroundScheme(Int_t BackgroundScheme){
     fSidebandMixingLow          = 0.600;
     fSidebandMixingHigh         = 0.650;
     break;
-  case 15: //f mixed event with pi0 sideband candidates (left side of pi0 peak)
+  case 15: //f same event with pi0 sideband candidates (left side of pi0 peak)
+    fBackgroundMode             = 6;
     fUseRotationMethodInBG      = kFALSE;
     fUseTrackMultiplicityForBG  = kFALSE;
     fDoBGProbability            = kFALSE;
@@ -3324,7 +3346,8 @@ Bool_t AliConversionMesonCuts::SetBackgroundScheme(Int_t BackgroundScheme){
     fSidebandMixingLow          = 0.42;
     fSidebandMixingHigh         = 0.47;
     break;
-  case 16: //g mixing event with pi0 sideband candidates (both sides of pi0 peak)
+  case 16: //g same event with pi0 sideband candidates (both sides of pi0 peak)
+    fBackgroundMode                  = 6;
     fUseRotationMethodInBG           = kFALSE;
     fUseTrackMultiplicityForBG       = kFALSE;
     fDoBGProbability                 = kFALSE;
@@ -3406,6 +3429,7 @@ Bool_t AliConversionMesonCuts::SetBackgroundScheme(Int_t BackgroundScheme){
     fGammaSwappMethodBg         = 0;
     fNumberOfSwappsForBg        = 1;
     fBackgroundHandler          = 2;
+    fBackgroundMode             = 7;
     break;
   case 28: // s cluster swapping method with 90 degree rotation angle with weighting
     fDoGammaSwappForBg          = 1;
@@ -3455,10 +3479,10 @@ Bool_t AliConversionMesonCuts::SetBackgroundScheme(Int_t BackgroundScheme){
     fNumberOfSwappsForBg        = 1;
     fBackgroundHandler          = 2;
     break;
-  case 35: // z cluster swapping method with 20 random with TGenPhaseSpace with event weighting & forbid decays that are similar to original decay (around Pi0 for the omega analyses)
+  case 35: // z cluster swapping method with 20 random with TGenPhaseSpace with event weighting (around Pi0 for the omega analyses)
     fDoGammaSwappForBg          = 2;
     fDoWeightingInSwappBg       = kTRUE;
-    fGammaSwappMethodBg         = 11;
+    fGammaSwappMethodBg         = 10;
     fNumberOfSwappsForBg        = 20;
     fBackgroundHandler          = 2;
     break;
@@ -3712,6 +3736,12 @@ Bool_t AliConversionMesonCuts::SetMCPSmearing(Int_t useMCPSmearing)
       fPSigSmearing     = 0.025;
       fPSigSmearingCte  = 0.020;
       break;
+    case 17:     //h
+      fUseMCPSmearing   = 2;
+      fPBremSmearing    = 1.;
+      fPSigSmearing     = 0.025;
+      fPSigSmearingCte  = 0.020;
+      break;
 
     default:
       AliError("Warning: UseMCPSmearing not defined");
@@ -3862,6 +3892,11 @@ Bool_t AliConversionMesonCuts::SetMCPSmearing(Int_t useMCPSmearing)
       fPBremSmearing    = 1.;
       fPSigSmearing     = 0.009;
       fPSigSmearingCte  = 0.011;
+    case 24:     //o
+      fUseMCPSmearing   = 2;
+      fPSigSmearing     = 0.000222327;
+      fPSigSmearingCte  = -0.000123638;
+
       break;
     default:
       AliError("Warning: UseMCPSmearing not defined");
@@ -4284,20 +4319,34 @@ void AliConversionMesonCuts::SmearParticle(AliAODConversionPhoton* photon)
     theta=acos( photon->Pz()/ photon->P());
   }
 
-  if( fPSigSmearing != 0. || fPSigSmearingCte!=0. ){
-    facPSig = TMath::Sqrt(fPSigSmearingCte*fPSigSmearingCte+fPSigSmearing*fPSigSmearing*P*P)*fRandom.Gaus(0.,1.);
-  }
-
-  if( fPBremSmearing != 1.){
-    if(fBrem!=NULL){
-      facPBrem = fBrem->GetRandom();
+  if (fUseMCPSmearing == 1){
+    if( fPSigSmearing != 0. || fPSigSmearingCte!=0. ){
+      facPSig = TMath::Sqrt(fPSigSmearingCte*fPSigSmearingCte+fPSigSmearing*fPSigSmearing*P*P)*fRandom.Gaus(0.,1.);
     }
-  }
 
-  photon->SetPx(facPBrem* (1+facPSig)* P*sin(theta)*cos(phi)) ;
-  photon->SetPy(facPBrem* (1+facPSig)* P*sin(theta)*sin(phi)) ;
-  photon->SetPz(facPBrem* (1+facPSig)* P*cos(theta)) ;
-  photon->SetE(photon->P());
+    if( fPBremSmearing != 1.){
+      if(fBrem!=NULL){
+        facPBrem = fBrem->GetRandom();
+      }
+    }
+
+    photon->SetPx(facPBrem* (1+facPSig)* P*sin(theta)*cos(phi)) ;
+    photon->SetPy(facPBrem* (1+facPSig)* P*sin(theta)*sin(phi)) ;
+    photon->SetPz(facPBrem* (1+facPSig)* P*cos(theta)) ;
+    photon->SetE(photon->P());
+  } else if (fUseMCPSmearing == 2) {
+    TF1* fScaling = new TF1("fScaling", "pol2", 0, 100);
+    fScaling->SetParameters(1.47693, -0.954702, 0.47791);    
+    facPSig = fRandom.Gaus(P,fScaling->GetX(fPSigSmearingCte+fPSigSmearing*P));
+    
+    photon->SetPx(facPSig*sin(theta)*cos(phi)) ;
+    photon->SetPy(facPSig*sin(theta)*sin(phi)) ;
+    photon->SetPz(facPSig*cos(theta));
+
+    photon->SetE(photon->P());
+  }
+  
+
 }
 //________________________________________________________________________
 void AliConversionMesonCuts::SmearVirtualPhoton(AliAODConversionPhoton* photon)

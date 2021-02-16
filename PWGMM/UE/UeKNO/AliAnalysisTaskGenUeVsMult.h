@@ -113,9 +113,9 @@ private:
 	TProfile * pSumPtTrue[3];
     
     TH1D * fMult[4];
-    TH2D * fHistPtLeadingVsNchNS[12][4];
-    TH2D * fHistPtLeadingVsNchAS[12][4];
-    TH2D * fHistPtLeadingVsNchTS[12][4];
+    TH3D * fHistPtLeadingVsNchNS[4];
+    TH3D * fHistPtLeadingVsNchAS[4];
+    TH3D * fHistPtLeadingVsNchTS[4];
 	
 
 	AliAnalysisTaskGenUeVsMult(const AliAnalysisTaskGenUeVsMult&);                  // not implemented

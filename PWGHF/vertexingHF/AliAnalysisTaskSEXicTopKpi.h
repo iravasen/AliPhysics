@@ -117,9 +117,10 @@ class AliAnalysisTaskSEXicTopKpi : public AliAnalysisTaskSE
   // dirty solution: flag to reduce the axes in the reco sparses ---> make the merging easier (mfaggin)
   void SetOnlyBayesPIDbin_recoSparse(Bool_t flag) {fOnlyBayesPIDbin=flag;}
   /// include the PID selection with Bayes approach only for proton
-  void SetExplPID_BayesOnlyProt(Bool_t flag){
+  void SetExplPID_BayesOnlyProt(Bool_t flag, Bool_t rejectStdPIDcases=kFALSE){
     if(!fExplore_PIDstdCuts)  SetExplorePIDstd(flag);
     fExplPID_BayesOnlyProt = flag;
+    fNoStdPIDcases = rejectStdPIDcases;
   }
 
   void SetLcMassWindowForSigmaC(Double_t massrange){fLcMassWindowForSigmaC=massrange;}
@@ -391,13 +392,21 @@ class AliAnalysisTaskSEXicTopKpi : public AliAnalysisTaskSE
   TH1F* fCandCounter; //!<!
   TH1F* fCandCounter_onTheFly; //!<!
 
+  // pT distribution of candidate soft pion tracks
+  TH1F* fPtSoftPionCand; //!<!
+  // pT distribution of candidate soft pion tracks inside SigmaC loop
+  TH1F* fPtSoftPionCand_insideScLoop; //!<!
+
   Double_t fNSigmaPreFilterPID; // number of sigma for TPC and TOF pre-filtering PID on tracks
   
   // bool to remove ev. selection (useful to run on ITS2-ITS3 upgrade MC)
   Bool_t fApplyEvSel;
 
+  // bool to keep only the Bayes PID- based PID selections
+  Bool_t fNoStdPIDcases;
+
   /// \cond CLASSIMP
-  ClassDef(AliAnalysisTaskSEXicTopKpi,17); /// AliAnalysisTaskSE for Xic->pKpi
+  ClassDef(AliAnalysisTaskSEXicTopKpi,18); /// AliAnalysisTaskSE for Xic->pKpi
   /// \endcond
 };
 

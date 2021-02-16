@@ -8,6 +8,7 @@ AliAnalysisTaskElectronEfficiencyV2* AddTask_dsekihat_ElectronEfficiencyV2_PbPb(
     const Bool_t applyPairCut = kTRUE,
     const TString pileupcut = "_woPU",//can be "_woPU", "_onlyPU",""
     const TString generators = "pizero_0;eta_1;etaprime_2;rho_3;omega_4;phi_5;jpsi_6;EvtGenDecay;Pythia CC_0;Pythia BB_0;Pythia B_0;",
+    const TString calibFileName = "",
     const std::string resolutionFilename ="",
     const std::string cocktailFilename   ="",
     const std::string centralityFilename ="",
@@ -28,8 +29,8 @@ AliAnalysisTaskElectronEfficiencyV2* AddTask_dsekihat_ElectronEfficiencyV2_PbPb(
   AliAnalysisTaskElectronEfficiencyV2* task = new AliAnalysisTaskElectronEfficiencyV2(Form("TaskElectronEfficiencyV2%s_Cen%d_%d_kINT7%s",suffix.Data(),CenMin,CenMax,pileupcut.Data()));
   gROOT->GetListOfSpecials()->Add(task);//this is only for ProcessLine(AddMCSignal);
 
-  TString configBasePath("$ALICE_PHYSICS/PWGDQ/dielectron/macrosLMEE/");
-	//TString configBasePath("./");
+  //TString configBasePath("$ALICE_PHYSICS/PWGDQ/dielectron/macrosLMEE/");
+	TString configBasePath("./");
 	if(getFromAlien
 			&& (!gSystem->Exec(Form("alien_cp alien:///alice/cern.ch/user/d/dsekihat/PWGDQ/dielectron/macrosLMEE/%s .",configFile.Data())))
 			&& (!gSystem->Exec(Form("alien_cp alien:///alice/cern.ch/user/d/dsekihat/PWGDQ/dielectron/macrosLMEE/%s .",libFile.Data())))
@@ -106,12 +107,11 @@ AliAnalysisTaskElectronEfficiencyV2* AddTask_dsekihat_ElectronEfficiencyV2_PbPb(
   for(Int_t i=110;i<Nmee;i++) mee[i] = 0.1  * (i-110) +  1.1;//from 1.1 to 5 GeV/c2, evety 0.1 GeV/c2
 	std::vector<double> v_mee(mee,std::end(mee));
 
-  const Int_t NpTee = 121;
+  const Int_t NpTee = 146;
   Double_t pTee[NpTee] = {};
-  for(Int_t i=0  ;i<10   ;i++) pTee[i] = 0.01 * (i-  0) +  0.0;//from 0 to 0.09 GeV/c, every 0.01 GeV/c
-  for(Int_t i=10 ;i<110  ;i++) pTee[i] = 0.1  * (i- 10) +  0.1;//from 0.1 to 10 GeV/c, evety 0.1 GeV/c
-  for(Int_t i=110;i<NpTee;i++) pTee[i] = 1.0  * (i-110) + 10.0;//from 10 to 20 GeV/c, evety 1.0 GeV/c
-	std::vector<double> v_pTee(pTee,std::end(pTee));
+  for(Int_t i=0  ;i<50    ;i++) pTee[i] = 0.01 * (i-  0) +  0.0;//from 0 to 0.49 GeV/c, every 0.01 GeV/c
+  for(Int_t i=50 ;i<NpTee ;i++) pTee[i] = 0.1  * (i- 50) +  0.5;//from 0.5 to 10 GeV/c, evety 0.1 GeV/c
+  std::vector<double> v_pTee(pTee,std::end(pTee));
 
   task->SetMassBins(v_mee);
   task->SetPairPtBins(v_pTee);
@@ -165,8 +165,27 @@ AliAnalysisTaskElectronEfficiencyV2* AddTask_dsekihat_ElectronEfficiencyV2_PbPb(
   // e.g. secondaries and primaries. or primaries from charm and resonances
   gROOT->ProcessLine(Form("AddSingleLegMCSignal(%s)",task->GetName()));//not task itself, task name
   gROOT->ProcessLine(Form("AddPairMCSignal(%s)"     ,task->GetName()));//not task itself, task name
-  gROOT->ProcessLine(Form("SetPIDMC(%s)"            ,task->GetName()));//not task itself, task name
 
+  //set PID map for ITS TOF in MC.
+  TFile *rootfile = 0x0;
+  if(calibFileName != "") rootfile = TFile::Open(calibFileName,"READ");
+  if(rootfile && rootfile->IsOpen()){
+    TH3D *h3mean_ITS  = (TH3D*)rootfile->Get("h3mean_ITS");
+    TH3D *h3width_ITS = (TH3D*)rootfile->Get("h3width_ITS");
+    h3mean_ITS ->SetDirectory(0);
+    h3width_ITS->SetDirectory(0);
+    task->SetCentroidCorrFunction(AliAnalysisTaskElectronEfficiencyV2::kITS, h3mean_ITS, AliDielectronVarManager::kNSDDSSDclsEvent, AliDielectronVarManager::kPIn,  AliDielectronVarManager::kEta);
+    task->SetWidthCorrFunction(AliAnalysisTaskElectronEfficiencyV2::kITS, h3width_ITS, AliDielectronVarManager::kNSDDSSDclsEvent, AliDielectronVarManager::kPIn,  AliDielectronVarManager::kEta );
+
+    TH3D *h3mean_TOF = (TH3D*)rootfile->Get("h3mean_TOF");
+    TH3D *h3width_TOF = (TH3D*)rootfile->Get("h3width_TOF");
+    h3mean_TOF ->SetDirectory(0);
+    h3width_TOF->SetDirectory(0);
+    task->SetCentroidCorrFunction(AliAnalysisTaskElectronEfficiencyV2::kTOF, h3mean_TOF, AliDielectronVarManager::kNSDDSSDclsEvent, AliDielectronVarManager::kPIn,  AliDielectronVarManager::kEta);
+    task->SetWidthCorrFunction(AliAnalysisTaskElectronEfficiencyV2::kTOF, h3width_TOF, AliDielectronVarManager::kNSDDSSDclsEvent, AliDielectronVarManager::kPIn,  AliDielectronVarManager::kEta);
+
+    rootfile->Close();
+  }
 	TString outlistname = Form("Efficiency_dsekihat%s_Cen%d_%d_kINT7%s",suffix.Data(),CenMin,CenMax,pileupcut.Data());
 
   //const TString fileName = AliAnalysisManager::GetCommonFileName();

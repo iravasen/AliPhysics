@@ -194,13 +194,16 @@ void        AliAnalysisTaskPhiCount::UserCreateOutputObjects()                  
     fPhiCandidate->Branch       ("InvMass",         &fInvMass,          "fInvMass[fnPhi]/F");
     fPhiCandidate->Branch       ("iKaon",           &fiKaon,            "fiKaon[fnPhi]/b");
     fPhiCandidate->Branch       ("jKaon",           &fjKaon,            "fjKaon[fnPhi]/b");
+    if ( kMCbool )  {
+        fPhiCandidate->Branch   ("Nature",          &fNature,           "fNature[fnPhi]/b");
+    }
     
     if ( kPhibool )                 PostData(3, fPhiCandidate);
     
     // KaonCandidate Tree Set-Up
     fKaonCandidate = new TTree ("KaonCandidate",    "Data Tree for Kaon Candidates");
     fKaonCandidate->Branch     ("Multiplicity",     &fMultiplicity,     "fMultiplicity/b");
-    fKaonCandidate->Branch     ("fnKaon",           &fnKaon,            "fnKaon/b");
+    fKaonCandidate->Branch     ("nKaon",            &fnKaon,            "fnKaon/b");
     fKaonCandidate->Branch     ("Px",               &fKaonPx,           "fKaonPx[fnKaon]/F");
     fKaonCandidate->Branch     ("Py",               &fKaonPy,           "fKaonPy[fnKaon]/F");
     fKaonCandidate->Branch     ("Pz",               &fKaonPz,           "fKaonPz[fnKaon]/F");
@@ -238,6 +241,7 @@ void        AliAnalysisTaskPhiCount::UserExec( Option_t* )                      
     // Setting zero all counters and global variables
     fnPhi           =   0;
     fnPhiTru        =   0;
+    fnPhiRec        =   0;
     fnKaon          =   0;
     fnPhiTru        =   0;
     
@@ -299,6 +303,13 @@ void        AliAnalysisTaskPhiCount::UserExec( Option_t* )                      
             fInvMass[fnPhi]     =   (fPhi).Mag();
             fiKaon[fnPhi]       =   iKaon;
             fjKaon[fnPhi]       =   jKaon;
+            fNature[fnPhi]      =   0;
+            if ( kMCbool && fIsCandidateTruPhi(static_cast<AliAODMCParticle*>(AODMCTrackArray->At(fKaonLabels[iKaon])),static_cast<AliAODMCParticle*>(AODMCTrackArray->At(fKaonLabels[jKaon]))) )
+            {
+                fNature[fnPhi]          =   1;
+                fPhiRecParticles[fnPhiRec] =   static_cast<AliAODMCParticle*>(AODMCTrackArray->At(static_cast<AliAODMCParticle*>(AODMCTrackArray->At(fKaonLabels[iKaon]))->GetMother()));
+                fnPhiRec++;
+            }
             fnPhi++;
         }
     }
@@ -320,8 +331,8 @@ void        AliAnalysisTaskPhiCount::UserExec( Option_t* )                      
             
             // Options
             fSelection[fnPhiTru]       =   0;
-            if( fIsPhiGen(fPhiTru) )    fSelection[fnPhiTru]++;
-            if( fIsPhiRec(fPhiTru) )    fSelection[fnPhiTru]++;
+            if( fIsPhiGen(fPhiTru) )    fSelection[fnPhiTru] = 1;
+            if( fIsPhiRec(fPhiTru) )    fSelection[fnPhiTru] = 2;
             
             fnPhiTru++;
         }
@@ -723,24 +734,13 @@ bool        AliAnalysisTaskPhiCount::fIsPhiCandidate ( TLorentzVector fPhi )    
 
 //_____________________________________________________________________________
 
-
-
-
-
-
-//
-//
-//_____________________________________________________________________________
-//
-//  TO BE REVISED
-//
-//_____________________________________________________________________________
-
-bool    AliAnalysisTaskPhiCount::fIsKaonTruPhi ( AliAODMCParticle* piKaon, AliAODMCParticle* pjKaon )
+bool    AliAnalysisTaskPhiCount::fIsCandidateTruPhi ( AliAODMCParticle* piKaon, AliAODMCParticle* pjKaon )
 {
     if ( !piKaon || !pjKaon ) return false;
-    if ( piKaon->GetMother() == pjKaon->GetMother() && (static_cast<AliAODMCParticle*>(AODMCTrackArray->At(pjKaon->GetMother()))->GetPdgCode() == 333 ) ) return true;
-    else return false;
+    auto    fiKaonMother    =   static_cast<AliAODMCParticle*>(AODMCTrackArray->At(piKaon->GetMother()));
+    auto    fjKaonMother    =   static_cast<AliAODMCParticle*>(AODMCTrackArray->At(pjKaon->GetMother()));
+    if  ( fiKaonMother->GetPdgCode() != fjKaonMother->GetPdgCode() || fjKaonMother->GetPdgCode() != 333 ) return false;
+    return fiKaonMother == fjKaonMother;
 }
 
 //_____________________________________________________________________________
@@ -752,35 +752,19 @@ bool    AliAnalysisTaskPhiCount::fIsPhiGen ( AliAODMCParticle* particle )
     auto const Dau2 =   static_cast<AliAODMCParticle*>  (AODMCTrackArray->At(particle->GetDaughterLast()));
     
     if ( !Dau1 || !Dau2 ) return false;
-    return  (
-                ( particle->GetNDaughters() == 2 ) &&
-                ( Dau1->GetPdgCode() == -Dau2->GetPdgCode() ) &&
-                ( abs(Dau1->GetPdgCode()) == 321 )
-             );
+    return  ( ( Dau1->GetPdgCode() == -Dau2->GetPdgCode() ) && ( abs(Dau1->GetPdgCode()) == 321 ) );
 }
 
 //_____________________________________________________________________________
 
 bool    AliAnalysisTaskPhiCount::fIsPhiRec ( AliAODMCParticle* particle )
 {
-    // To be recrodable, it must come from a K^+k^- decay
-    if ( fSelection[fnPhi] != 1 ) return false;
-    
-    // Generating Daughter 1 and 2 Particles instances
-    auto const Dau1 =   static_cast<AliAODMCParticle*>  (AODMCTrackArray->At(particle->GetDaughterFirst()));
-    auto const Dau2 =   static_cast<AliAODMCParticle*>  (AODMCTrackArray->At(particle->GetDaughterLast()));
-    
-    Bool_t  fbDau1  =   false;
-    Bool_t  fbDau2  =   false;
-
-    // looping over all kaons
-    for ( int iKaon = 0; iKaon < fnKaon; iKaon++ )
+    // looping over all recordable phis
+    for ( int iPhi = 0; iPhi < fnPhiRec; iPhi++ )
     {
-        // recovering kaon label
-        if ( fKaonLabels[iKaon] == Dau1->GetLabel() ) fbDau1 = true;
-        if ( fKaonLabels[iKaon] == Dau2->GetLabel() ) fbDau2 = true;
+        if ( fPhiRecParticles[iPhi] == particle ) return true;
     }
-    return fbDau1 && fbDau2;
+    return false;
 }
 
 //_____________________________________________________________________________

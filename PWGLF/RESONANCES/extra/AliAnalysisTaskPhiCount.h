@@ -180,6 +180,8 @@ class AliAnalysisTaskPhiCount : public AliAnalysisTaskSE
     //
     UChar_t                     fMultiplicity;              //! Event Multiplicity
     Int_t                       fKaonLabels     [1024];     //! Kaon Labels
+    Int_t                       fnPhiRec;                   //! Recordable Phi Number
+    AliAODMCParticle*           fPhiRecParticles[1024];     //! Recordable Phi Labels
     //
     // Trees
     //
@@ -194,6 +196,7 @@ class AliAnalysisTaskPhiCount : public AliAnalysisTaskSE
     Float_t                     fPhiPz          [1024];     //! Phi Pz
     UChar_t                     fiKaon          [1024];     //! iKaon
     UChar_t                     fjKaon          [1024];     //! jKaon
+    UChar_t                     fNature         [1024];     //! Nature
     //
     TTree                      *fKaonCandidate;             //! output tree for Signal
     UChar_t                     fnKaon;                     //! Number of Phis produced found
@@ -222,7 +225,7 @@ class AliAnalysisTaskPhiCount : public AliAnalysisTaskSE
     Bool_t                    fIsPhiGen                   ( AliAODMCParticle* particle );
     Bool_t                    fIsPhiRec                   ( AliAODMCParticle* particle );
     Bool_t                    fIsPhi                      ( AliAODMCParticle* particle );
-    Bool_t                    fIsKaonTruPhi               ( AliAODMCParticle* piKaon, AliAODMCParticle* pjKaon );
+    Bool_t                    fIsCandidateTruPhi               ( AliAODMCParticle* piKaon, AliAODMCParticle* pjKaon );
     //
     //>->->->->->->->->->->->->->->->->->->->->->->->->->-> Class Definition
     //
